@@ -1,30 +1,40 @@
-import org.scalatest.{FunSuite, Matchers}
+import org.scalacheck.{ Arbitrary, Gen }
+import org.scalatest.prop.PropertyChecks
+import org.scalatest.{ FunSuite, Matchers }
 
-trait TestStyle extends FunSuite with Matchers
+trait TestStyle extends FunSuite with Matchers with PropertyChecks
 
 class CreditCardTest extends TestStyle {
-  test("Creating a card without passing any number should generate a valid credit card") {
-    CreditCard() shouldBe 'valid
-  }
+  val genValid: Gen[CreditCard] = Arbitrary.arbitrary[Unit].map(_ => CreditCard())
 
-  test("Creating a card without passing any number should create a card of class CreditCard.Valid") {
-    CreditCard() shouldBe a[CreditCard.Valid]
+  implicit val arbitraryValid: Arbitrary[CreditCard.Valid] = Arbitrary(
+    genValid.map(_.asInstanceOf[CreditCard.Valid]))
+
+  test("Creating a card without passing any number should generate a valid credit card") {
+    forAll { validCard: CreditCard.Valid =>
+      validCard shouldBe 'valid
+    }
   }
 
   test("Creating a card manually by passing a valid number should produce a valid credit card") {
-    val validNumber = CreditCard().number
+    forAll { validCard: CreditCard.Valid =>
+      val validNumber = validCard.number
 
-    CreditCard(validNumber) shouldBe 'valid
-    noException should be thrownBy CreditCard(validNumber).asInstanceOf[CreditCard.Valid]
+      CreditCard(validNumber) shouldBe 'valid
+      noException should be thrownBy CreditCard(validNumber).asInstanceOf[CreditCard.Valid]
+    }
   }
 
   test("Credit card's toString method should mention validity") {
     CreditCard("").toString.toLowerCase should include("invalid")
-    CreditCard().toString.toLowerCase should not include "invalid"
+
+    forAll { validCard: CreditCard.Valid =>
+      validCard.toString.toLowerCase should not include "invalid"
+    }
   }
 
   test("All these numbers should be valid") {
-    val fakeCards = Set(
+    val fakeValidCards = Seq(
       "4716705036623214",
       "4539463559309291",
       "4489308492298937136",
@@ -57,15 +67,12 @@ class CreditCardTest extends TestStyle {
       "4026540496718609",
       "6383589253369421",
       "6396181399415584",
-      "6376567786703901"
-    ).map(CreditCard)
+      "6376567786703901").map(CreditCard)
 
-    all(fakeCards.map(_.isValid)) shouldBe true
-  }
+    val gen: Gen[CreditCard] = Gen.oneOf(fakeValidCards)
 
-  test("10,000 generated numbers should be valid") {
-    val fakeCards = 1 to 10000 map (_ => CreditCard())
-
-    all(fakeCards.map(_.isValid)) shouldBe true
+    forAll(gen) { validCard: CreditCard =>
+      validCard shouldBe 'valid
+    }
   }
 }
